@@ -1,0 +1,2 @@
+# Ignore generated benchmark result files (binary, can be large)
+*.rds
