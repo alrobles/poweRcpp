@@ -1,0 +1,8 @@
+useDynLib(poweRcpp, .registration=TRUE)
+importFrom(Rcpp, evalCpp)
+importFrom(RcppParallel, RcppParallelLibs)
+export(fit_powerlaw)
+export(powerlaw_pdf)
+export(powerlaw_cdf)
+export(powerlaw_gof)
+export(powerlaw_generate)

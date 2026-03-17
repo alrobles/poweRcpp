@@ -1,0 +1,27 @@
+Package: poweRcpp
+Type: Package
+Title: High-Performance Power-Law Distribution Fitting via Rcpp and RcppParallel
+Version: 0.1.0
+Date: 2026-03-17
+Authors@R: person("Angel Luis", "Robles Fernandez",
+    email = "a.l.robles.fernandez@gmail.com",
+    role = c("aut", "cre"))
+Description: Provides high-performance fitting of the discrete power-law
+    distribution using maximum likelihood estimation and Kolmogorov-Smirnov
+    goodness-of-fit testing. The core algorithms are implemented in C++,
+    adapted from the 'powerlaw' library, and parallelized with 'RcppParallel'
+    for efficient bootstrap goodness-of-fit computation. Supports left-bounded
+    (Type I) and right-bounded (Type II) discrete power-law distributions.
+License: MIT + file LICENSE
+Imports:
+    Rcpp,
+    RcppParallel
+LinkingTo:
+    Rcpp,
+    RcppParallel
+SystemRequirements: GNU make
+RoxygenNote: 7.3.1
+Encoding: UTF-8
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
