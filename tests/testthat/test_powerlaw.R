@@ -1,0 +1,203 @@
+## Unit tests for poweRcpp
+## Tests are designed to be fast (small n, low alpha_precision, few replicas).
+
+library(poweRcpp)
+
+## ============================================================
+## Helper: simple power-law sample generator in pure R
+## (for testing purposes only)
+## ============================================================
+r_powerlaw <- function(n, alpha, x_min = 1L)
+{
+    ## Inverse-transform approximation using continuous approximation
+    u   <- runif(n)
+    x   <- floor(x_min * (1 - u)^(-1 / (alpha - 1)))
+    as.integer(pmax(x, x_min))
+}
+
+## ============================================================
+## Tests: fit_powerlaw
+## ============================================================
+
+test_that("fit_powerlaw returns a list with expected names", {
+    set.seed(1)
+    data <- as.integer(r_powerlaw(200, alpha = 2.5, x_min = 2L))
+    result <- fit_powerlaw(data, x_min = 2L, alpha_precision = 0.1)
+
+    expect_type(result, "list")
+    expected_names <- c("alpha", "x_min", "x_max", "ks_statistic",
+                        "standard_error", "log_likelihood", "n_tail",
+                        "type", "valid")
+    expect_true(all(expected_names %in% names(result)))
+})
+
+test_that("fit_powerlaw with fixed x_min returns valid = TRUE for valid data", {
+    set.seed(2)
+    data <- as.integer(r_powerlaw(300, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.1)
+
+    expect_true(result$valid)
+    expect_gt(result$alpha, 1.0)
+    expect_gte(result$x_min, 1L)
+})
+
+test_that("fit_powerlaw alpha estimate is in a plausible range", {
+    set.seed(3)
+    data <- as.integer(r_powerlaw(500, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.05)
+
+    ## With alpha_precision = 0.05 and 500 samples the estimate should be
+    ## within ±0.5 of the true value (very generous tolerance)
+    expect_true(result$valid)
+    expect_gt(result$alpha, 1.5)
+    expect_lt(result$alpha, 4.0)
+})
+
+test_that("fit_powerlaw without x_min still returns a valid fit", {
+    set.seed(4)
+    data <- as.integer(r_powerlaw(200, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, alpha_precision = 0.1)
+
+    expect_true(result$valid)
+    expect_false(is.na(result$alpha))
+    expect_false(is.na(result$x_min))
+})
+
+test_that("fit_powerlaw stops on empty input", {
+    expect_error(fit_powerlaw(integer(0)), "'data' must be a non-empty")
+})
+
+test_that("fit_powerlaw stops on non-positive values", {
+    expect_error(fit_powerlaw(c(-1L, 2L, 3L)), "positive integers")
+})
+
+test_that("fit_powerlaw coerces numeric to integer without error", {
+    set.seed(5)
+    data_num <- r_powerlaw(100, alpha = 2.5, x_min = 1L)
+    result   <- fit_powerlaw(data_num, x_min = 1L, alpha_precision = 0.1)
+    expect_true(result$valid)
+})
+
+test_that("fit_powerlaw removes NAs with a warning", {
+    set.seed(6)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5))
+    data_with_na <- c(data, NA_integer_)
+    expect_warning(
+        result <- fit_powerlaw(data_with_na, x_min = 1L, alpha_precision = 0.1),
+        "NA values"
+    )
+    expect_true(result$valid)
+})
+
+## ============================================================
+## Tests: powerlaw_pdf
+## ============================================================
+
+test_that("powerlaw_pdf returns values between 0 and 1", {
+    vals <- powerlaw_pdf(1L:20L, alpha = 2.5, x_min = 1L)
+    expect_true(all(vals >= 0 & vals <= 1))
+})
+
+test_that("powerlaw_pdf is monotonically decreasing", {
+    vals <- powerlaw_pdf(1L:10L, alpha = 2.5, x_min = 1L)
+    expect_true(all(diff(vals) < 0))
+})
+
+test_that("powerlaw_pdf sums to approximately 1 over a wide range", {
+    ## The true sum over all positive integers should be 1, so summing
+    ## over 1..10000 should be close
+    vals  <- powerlaw_pdf(1L:10000L, alpha = 3.0, x_min = 1L)
+    total <- sum(vals)
+    expect_gt(total, 0.99)
+    expect_lt(total, 1.01)
+})
+
+test_that("powerlaw_pdf stops when alpha <= 1", {
+    expect_error(powerlaw_pdf(1L:5L, alpha = 1.0), "'alpha' must be > 1")
+})
+
+## ============================================================
+## Tests: powerlaw_cdf
+## ============================================================
+
+test_that("powerlaw_cdf at x_min equals 1.0", {
+    val <- powerlaw_cdf(1L, alpha = 2.5, x_min = 1L)
+    expect_equal(val, 1.0)
+})
+
+test_that("powerlaw_cdf is monotonically non-increasing", {
+    vals <- powerlaw_cdf(1L:20L, alpha = 2.5, x_min = 1L)
+    expect_true(all(diff(vals) <= 0))
+})
+
+test_that("powerlaw_cdf returns values in [0, 1]", {
+    vals <- powerlaw_cdf(1L:50L, alpha = 2.5, x_min = 1L)
+    expect_true(all(vals >= 0 & vals <= 1))
+})
+
+## ============================================================
+## Tests: powerlaw_generate
+## ============================================================
+
+test_that("powerlaw_generate returns an integer vector of length n", {
+    set.seed(10)
+    smp <- powerlaw_generate(50L, alpha = 2.5, x_min = 1L)
+    expect_type(smp, "integer")
+    expect_length(smp, 50L)
+})
+
+test_that("powerlaw_generate samples are >= x_min", {
+    set.seed(11)
+    x_min <- 3L
+    smp   <- powerlaw_generate(200L, alpha = 2.5, x_min = x_min)
+    expect_true(all(smp >= x_min))
+})
+
+test_that("powerlaw_generate stops for invalid alpha", {
+    expect_error(powerlaw_generate(10L, alpha = 0.5, x_min = 1L), "'alpha' must be > 1")
+})
+
+test_that("powerlaw_generate stops for n <= 0", {
+    expect_error(powerlaw_generate(0L, alpha = 2.5), "'n' must be a positive integer")
+})
+
+## ============================================================
+## Tests: powerlaw_gof
+## ============================================================
+
+test_that("powerlaw_gof returns a list with expected names", {
+    set.seed(20)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    gof  <- powerlaw_gof(data, x_min = 1L, replicas = 50L)
+
+    expect_type(gof, "list")
+    expected <- c("p_value", "ks_statistic", "alpha", "x_min", "replicas")
+    expect_true(all(expected %in% names(gof)))
+})
+
+test_that("powerlaw_gof p_value is in [0, 1]", {
+    set.seed(21)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    gof  <- powerlaw_gof(data, x_min = 1L, replicas = 50L)
+
+    expect_gte(gof$p_value, 0.0)
+    expect_lte(gof$p_value, 1.0)
+})
+
+test_that("powerlaw_gof ks_statistic is non-negative", {
+    set.seed(22)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    gof  <- powerlaw_gof(data, x_min = 1L, replicas = 50L)
+
+    expect_gte(gof$ks_statistic, 0.0)
+})
+
+test_that("powerlaw_gof stops on empty data", {
+    expect_error(powerlaw_gof(integer(0)), "'data' must be a non-empty")
+})
+
+test_that("powerlaw_gof stops on non-positive replicas", {
+    set.seed(23)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5))
+    expect_error(powerlaw_gof(data, replicas = 0L), "'replicas' must be")
+})
