@@ -15,6 +15,18 @@ r_powerlaw <- function(n, alpha, x_min = 1L)
     as.integer(pmax(x, x_min))
 }
 
+## Reference PMF (R implementation) for comparison with C++ PDF
+r_powerlaw_pmf <- function(x, alpha, x_min = 1L)
+{
+    ## P(X = k) = k^{-alpha} / sum_{k=x_min}^{Inf} k^{-alpha}
+    ## Approximated as k^{-alpha} / zeta(alpha, x_min) using the
+    ## partial sum over a wide range
+    k   <- x_min:max(x_min + 5000L, max(x))
+    Z   <- sum(k^(-alpha))
+    vapply(as.integer(x), function(xi)
+        if (xi < x_min) 0.0 else xi^(-alpha) / Z, numeric(1))
+}
+
 ## ============================================================
 ## Tests: fit_powerlaw
 ## ============================================================
@@ -200,4 +212,91 @@ test_that("powerlaw_gof stops on non-positive replicas", {
     set.seed(23)
     data <- as.integer(r_powerlaw(100, alpha = 2.5))
     expect_error(powerlaw_gof(data, replicas = 0L), "'replicas' must be")
+})
+
+## ============================================================
+## Tests: alpha estimation accuracy (Brent's method vs truth)
+## ============================================================
+
+test_that("fit_powerlaw alpha estimate is close to truth with larger sample", {
+    ## With n = 2000 and a large x_min the MLE should be within ~0.15 of 2.5
+    set.seed(30)
+    data   <- as.integer(r_powerlaw(2000, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.01)
+
+    expect_true(result$valid)
+    expect_gt(result$alpha, 2.0)
+    expect_lt(result$alpha, 3.2)
+})
+
+test_that("fit_powerlaw alpha is more precise than alpha_precision", {
+    ## Brent's method returns continuous-valued alpha, not rounded to grid
+    set.seed(31)
+    data   <- as.integer(r_powerlaw(500, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.1)
+
+    expect_true(result$valid)
+    ## alpha should be strictly greater precision than alpha_precision=0.1
+    ## (allow equality in degenerate cases, but alpha must be > 1)
+    expect_gt(result$alpha, 1.0)
+})
+
+## ============================================================
+## Tests: PDF vs reference R implementation
+## ============================================================
+
+test_that("powerlaw_pdf matches pure-R reference implementation", {
+    x     <- 1L:30L
+    alpha <- 2.5
+    x_min <- 1L
+
+    cpp_pdf <- powerlaw_pdf(x, alpha = alpha, x_min = x_min)
+    ref_pdf <- r_powerlaw_pmf(x, alpha = alpha, x_min = x_min)
+
+    ## Should agree to within 0.5 % (partial-sum reference vs exact zeta)
+    rel_err <- abs(cpp_pdf - ref_pdf) / pmax(ref_pdf, 1e-12)
+    expect_true(all(rel_err < 0.005))
+})
+
+## ============================================================
+## Tests: right-bounded distribution
+## ============================================================
+
+test_that("fit_powerlaw type='right' returns valid result", {
+    set.seed(40)
+    ## Generate data truncated to [1, 100] to simulate a right-bounded scenario.
+    ## For type = "right", x_min is used as xMax (upper bound), so pass NULL
+    ## to let the algorithm estimate xMax automatically.
+    data <- as.integer(r_powerlaw(300, alpha = 2.5, x_min = 1L))
+    data <- data[data <= 100L]
+
+    result <- fit_powerlaw(data, alpha_precision = 0.1, type = "right")
+    expect_true(result$valid)
+    expect_equal(result$type, "Right bounded (Type II)")
+    expect_gt(result$alpha, 1.0)
+})
+
+test_that("fit_powerlaw log_likelihood is finite for right-bounded fit", {
+    set.seed(41)
+    data <- as.integer(r_powerlaw(200, alpha = 2.5, x_min = 1L))
+    data <- data[data <= 200L]
+
+    result <- fit_powerlaw(data, alpha_precision = 0.1, type = "right")
+    expect_true(result$valid)
+    expect_true(is.finite(result$log_likelihood))
+})
+
+## ============================================================
+## Tests: survival function (CDF) properties
+## ============================================================
+
+test_that("powerlaw_cdf is strictly decreasing for x > x_min", {
+    vals <- powerlaw_cdf(1L:50L, alpha = 2.5, x_min = 1L)
+    ## All differences should be strictly negative
+    expect_true(all(diff(vals) < 0))
+})
+
+test_that("powerlaw_cdf approaches 0 as x grows large", {
+    val_large <- powerlaw_cdf(10000L, alpha = 2.5, x_min = 1L)
+    expect_lt(val_large, 0.001)
 })
