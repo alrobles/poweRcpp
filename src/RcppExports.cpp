@@ -2,7 +2,7 @@
 // Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #include <Rcpp.h>
-#include <RcppParallel.h>
+
 using namespace Rcpp;
 
 #ifdef RCPP_USE_GLOBAL_ROSTREAM
@@ -81,11 +81,11 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_poweRcpp_fit_powerlaw_cpp",       (DL_FUNC) &_poweRcpp_fit_powerlaw_cpp,       4},
-    {"_poweRcpp_powerlaw_pdf_cpp",       (DL_FUNC) &_poweRcpp_powerlaw_pdf_cpp,       3},
-    {"_poweRcpp_powerlaw_cdf_cpp",       (DL_FUNC) &_poweRcpp_powerlaw_cdf_cpp,       3},
-    {"_poweRcpp_powerlaw_generate_cpp",  (DL_FUNC) &_poweRcpp_powerlaw_generate_cpp,  4},
-    {"_poweRcpp_powerlaw_gof_cpp",       (DL_FUNC) &_poweRcpp_powerlaw_gof_cpp,       5},
+    {"_poweRcpp_fit_powerlaw_cpp", (DL_FUNC) &_poweRcpp_fit_powerlaw_cpp, 4},
+    {"_poweRcpp_powerlaw_pdf_cpp", (DL_FUNC) &_poweRcpp_powerlaw_pdf_cpp, 3},
+    {"_poweRcpp_powerlaw_cdf_cpp", (DL_FUNC) &_poweRcpp_powerlaw_cdf_cpp, 3},
+    {"_poweRcpp_powerlaw_generate_cpp", (DL_FUNC) &_poweRcpp_powerlaw_generate_cpp, 4},
+    {"_poweRcpp_powerlaw_gof_cpp", (DL_FUNC) &_poweRcpp_powerlaw_gof_cpp, 5},
     {NULL, NULL, 0}
 };
 

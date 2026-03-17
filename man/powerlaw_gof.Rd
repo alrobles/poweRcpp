@@ -4,8 +4,13 @@
 \alias{powerlaw_gof}
 \title{Goodness-of-fit test for a discrete power-law distribution}
 \usage{
-powerlaw_gof(data, alpha = NULL, x_min = NULL, replicas = 1000L,
-  type = c("left", "right"))
+powerlaw_gof(
+  data,
+  alpha = NULL,
+  x_min = NULL,
+  replicas = 1000L,
+  type = c("left", "right")
+)
 }
 \arguments{
 \item{data}{Positive integer vector of observations.}
@@ -34,7 +39,10 @@ A named list with elements:
 \description{
 Computes a p-value for the hypothesis that \code{data} are drawn from a
 discrete power-law distribution.  A semi-parametric bootstrap procedure
-(Clauset, Shalizi & Newman 2009) is used.  The bootstrap loop is
+(Clauset, Shalizi & Newman 2009) is used: synthetic datasets are generated
+by combining a parametric power-law tail with non-parametric resampling of
+the body, and the fraction of replicas whose KS statistic exceeds the
+observed value is returned as the p-value.  The bootstrap loop is
 parallelised with \pkg{RcppParallel}.
 }
 \examples{
@@ -44,6 +52,7 @@ data <- sample(1:500, 200, replace = TRUE, prob = (1:500)^(-2.5))
 gof  <- powerlaw_gof(data, replicas = 500)
 cat("p-value:", gof$p_value, "\n")
 }
+
 }
 \references{
 Clauset, A., Shalizi, C.R. & Newman, M.E.J. (2009).

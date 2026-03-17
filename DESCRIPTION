@@ -12,7 +12,7 @@ Description: Provides high-performance fitting of the discrete power-law
     adapted from the 'powerlaw' library, and parallelized with 'RcppParallel'
     for efficient bootstrap goodness-of-fit computation. Supports left-bounded
     (Type I) and right-bounded (Type II) discrete power-law distributions.
-License: MIT + file LICENSE
+License: GPL (>= 3)
 Imports:
     Rcpp,
     RcppParallel
@@ -20,7 +20,7 @@ LinkingTo:
     Rcpp,
     RcppParallel
 SystemRequirements: GNU make
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.3
 Encoding: UTF-8
 Suggests:
     testthat (>= 3.0.0)

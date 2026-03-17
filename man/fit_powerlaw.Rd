@@ -4,7 +4,12 @@
 \alias{fit_powerlaw}
 \title{Fit a discrete power-law distribution}
 \usage{
-fit_powerlaw(data, x_min = NULL, alpha_precision = 0.01, type = c("left", "right"))
+fit_powerlaw(
+  data,
+  x_min = NULL,
+  alpha_precision = 0.01,
+  type = c("left", "right")
+)
 }
 \arguments{
 \item{data}{A positive integer vector of observations.}
@@ -44,6 +49,7 @@ data <- sample(1:500, 200, replace = TRUE, prob = (1:500)^(-2.5))
 result <- fit_powerlaw(data)
 cat("Estimated alpha:", result$alpha, "\n")
 cat("Estimated x_min:", result$x_min, "\n")
+
 }
 \references{
 Clauset, A., Shalizi, C.R. & Newman, M.E.J. (2009).

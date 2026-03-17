@@ -22,4 +22,5 @@ distribution with exponent \code{alpha} and lower cut-off \code{x_min}.
 }
 \examples{
 powerlaw_cdf(1:10, alpha = 2.5, x_min = 1)
+
 }

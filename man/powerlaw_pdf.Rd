@@ -22,4 +22,5 @@ of a left-bounded discrete power-law distribution.
 }
 \examples{
 powerlaw_pdf(1:10, alpha = 2.5, x_min = 1)
+
 }

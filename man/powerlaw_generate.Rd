@@ -27,4 +27,5 @@ inversion sampling on the pre-computed CDF.
 set.seed(1)
 samples <- powerlaw_generate(100, alpha = 2.5, x_min = 1)
 hist(samples, breaks = 20, main = "Power-law samples")
+
 }
