@@ -17,8 +17,9 @@ fit_powerlaw(
 \item{x_min}{Integer lower cut-off.  When \code{NULL} (default) it is
 estimated from the data by minimising the KS statistic.}
 
-\item{alpha_precision}{Numeric grid step used during the alpha search
-(default \code{0.01}).}
+\item{alpha_precision}{Numeric tolerance used when searching for the optimal
+alpha (default \code{0.01}).  Smaller values give higher precision but
+require more Hurwitz zeta evaluations.}
 
 \item{type}{Distribution type.  \code{"left"} (default) fits a left-bounded
 (Type I) power law; \code{"right"} fits a right-bounded (Type II) power law.}
@@ -41,7 +42,8 @@ A named list with elements:
 Estimates the exponent \eqn{\alpha} and, optionally, the lower cut-off
 \eqn{x_{\min}} of a discrete power-law distribution using the maximum
 likelihood estimator and Kolmogorov-Smirnov criterion described in Clauset,
-Shalizi & Newman (2009).
+Shalizi & Newman (2009).  Alpha is found via Brent's method applied to the
+log-likelihood, which is faster than a fixed-step grid search.
 }
 \examples{
 set.seed(42)
