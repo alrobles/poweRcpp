@@ -10,8 +10,11 @@ Description: Provides high-performance fitting of the discrete power-law
     distribution using maximum likelihood estimation and Kolmogorov-Smirnov
     goodness-of-fit testing. The core algorithms are implemented in C++,
     adapted from the 'powerlaw' library, and parallelized with 'RcppParallel'
-    for efficient bootstrap goodness-of-fit computation. Supports left-bounded
-    (Type I) and right-bounded (Type II) discrete power-law distributions.
+    for efficient bootstrap goodness-of-fit computation. Alpha MLE uses
+    Brent's method (super-linear convergence) instead of a fixed-step grid
+    search, and empirical CDF construction uses a single linear pass for
+    O(n) complexity. Supports left-bounded (Type I) and right-bounded
+    (Type II) discrete power-law distributions.
 License: GPL (>= 3)
 Imports:
     Rcpp,
