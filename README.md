@@ -1,7 +1,6 @@
 # poweRcpp
 
-> High-performance fitting of discrete power-law distributions in R via Rcpp
-> and RcppParallel.
+> High-performance fitting of discrete power-law distributions in R via Rcpp and RcppParallel.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -12,6 +11,12 @@
 **poweRcpp** provides a modern R interface to the
 [powerlaw](https://github.com/alrobles/powerlaw) C++ library, a high-performance
 fitter for the discrete power-law distribution.
+
+### Attribution
+This project, **poweRcpp**, is a reimplementation and extension of the original
+[**DiscretePowerlawFitter**](https://github.com/CarlosManuelRodr/DiscretePowerlawFitter) library,
+designed by Carlos Manuel Rodriguez. I am grateful to Carlos for his foundational work,
+and this project builds on it with additional optimizations and an R interface.
 
 Key features:
 
@@ -203,7 +208,6 @@ system.time(powerlaw_gof(as.integer(moby), replicas = 1000L))
 # install.packages("testthat")
 devtools::test()
 ```
-
 Tests are located in `tests/testthat/test_powerlaw.R` and cover:
 
 - Parameter estimation accuracy
