@@ -15,7 +15,7 @@
 #' @param type Distribution type.  \code{"left"} (default) fits a left-bounded
 #'   (Type I) power law; \code{"right"} fits a right-bounded (Type II) power law.
 #'
-#' @return A named list with elements:
+#' @return An object of class \code{"powerlaw_fit"}: a named list with elements:
 #' \describe{
 #'   \item{alpha}{Estimated power-law exponent.}
 #'   \item{x_min}{Estimated (or supplied) lower cut-off.}
@@ -33,6 +33,11 @@
 #' Power-law distributions in empirical data.
 #' \emph{SIAM Review}, 51(4), 661-703.
 #' \doi{10.1137/070710111}
+#'
+#' @seealso \code{\link{powerlaw_gof}} for goodness-of-fit testing,
+#'   \code{\link{powerlaw_pdf}} for the PMF,
+#'   \code{\link{powerlaw_cdf}} for the survival function,
+#'   \code{\link{powerlaw_generate}} for random variate generation.
 #'
 #' @examples
 #' set.seed(42)
@@ -61,12 +66,60 @@ fit_powerlaw <- function(data,
     if (any(data <= 0L))
         stop("All values in 'data' must be positive integers.")
 
-    fit_powerlaw_cpp(
+    result <- fit_powerlaw_cpp(
         data,
         x_min           = if (is.null(x_min)) NULL else as.integer(x_min),
         alpha_precision = alpha_precision,
         type            = type
     )
+    structure(result, class = "powerlaw_fit")
+}
+
+#' Print method for powerlaw_fit objects
+#'
+#' @param x A \code{powerlaw_fit} object returned by \code{\link{fit_powerlaw}}.
+#' @param ... Further arguments (ignored).
+#'
+#' @return Invisibly returns \code{x}.
+#'
+#' @export
+print.powerlaw_fit <- function(x, ...)
+{
+    cat("Discrete power-law distribution fit\n")
+    cat("  Type        :", x$type, "\n")
+    cat("  Alpha       :", if (is.na(x$alpha)) "NA" else format(x$alpha, digits = 6), "\n")
+    cat("  x_min       :", if (is.na(x$x_min)) "NA" else x$x_min, "\n")
+    cat("  x_max       :", if (is.na(x$x_max)) "NA" else x$x_max, "\n")
+    cat("  KS statistic:", if (is.na(x$ks_statistic)) "NA"
+                           else format(x$ks_statistic, digits = 4), "\n")
+    cat("  Std. error  :", if (is.na(x$standard_error)) "NA"
+                           else format(x$standard_error, digits = 4), "\n")
+    cat("  Log-lik.    :", if (is.na(x$log_likelihood)) "NA"
+                           else format(x$log_likelihood, digits = 6), "\n")
+    cat("  Tail obs.   :", if (is.na(x$n_tail)) "NA" else x$n_tail, "\n")
+    cat("  Valid       :", x$valid, "\n")
+    invisible(x)
+}
+
+#' Summary method for powerlaw_fit objects
+#'
+#' @param object A \code{powerlaw_fit} object returned by \code{\link{fit_powerlaw}}.
+#' @param ... Further arguments (ignored).
+#'
+#' @return Invisibly returns \code{object}.
+#'
+#' @export
+summary.powerlaw_fit <- function(object, ...)
+{
+    print(object)
+    if (object$valid)
+    {
+        cat("\n")
+        cat("  alpha ± 1 SE: [",
+            format(object$alpha - object$standard_error, digits = 5), ", ",
+            format(object$alpha + object$standard_error, digits = 5), "]\n", sep = "")
+    }
+    invisible(object)
 }
 
 #' Discrete power-law probability mass function
@@ -79,6 +132,9 @@ fit_powerlaw <- function(data,
 #' @param x_min Lower cut-off (positive integer, default \code{1}).
 #'
 #' @return Numeric vector of probability mass values.
+#'
+#' @seealso \code{\link{powerlaw_cdf}}, \code{\link{fit_powerlaw}},
+#'   \code{\link{powerlaw_generate}}.
 #'
 #' @examples
 #' powerlaw_pdf(1:10, alpha = 2.5, x_min = 1)
@@ -96,12 +152,17 @@ powerlaw_pdf <- function(x, alpha, x_min = 1L)
 #'
 #' Evaluates \eqn{P(X \geq x)} for a left-bounded discrete power-law
 #' distribution with exponent \code{alpha} and lower cut-off \code{x_min}.
+#' This is the complementary CDF (survival function), not the traditional
+#' CDF \eqn{P(X \leq x)}.
 #'
 #' @param x     Integer vector of values.
 #' @param alpha Power-law exponent (\eqn{\alpha > 1}).
 #' @param x_min Lower cut-off (positive integer, default \code{1}).
 #'
 #' @return Numeric vector of survival-function values in \eqn{[0, 1]}.
+#'
+#' @seealso \code{\link{powerlaw_pdf}}, \code{\link{fit_powerlaw}},
+#'   \code{\link{powerlaw_generate}}.
 #'
 #' @examples
 #' powerlaw_cdf(1:10, alpha = 2.5, x_min = 1)
@@ -124,9 +185,12 @@ powerlaw_cdf <- function(x, alpha, x_min = 1L)
 #' @param alpha Power-law exponent (\eqn{\alpha > 1}).
 #' @param x_min Lower cut-off (positive integer, default \code{1}).
 #' @param x_max Upper cut-off.  When \code{NULL} (default), uses
-#'   \code{x_min * 1000}.
+#'   \code{x_min * 1000}.  Must be strictly greater than \code{x_min}.
 #'
 #' @return Integer vector of length \code{n}.
+#'
+#' @seealso \code{\link{fit_powerlaw}}, \code{\link{powerlaw_pdf}},
+#'   \code{\link{powerlaw_cdf}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -142,6 +206,8 @@ powerlaw_generate <- function(n, alpha, x_min = 1L, x_max = NULL)
         stop("'alpha' must be > 1.")
     if (x_min < 1)
         stop("'x_min' must be >= 1.")
+    if (!is.null(x_max) && as.integer(x_max) <= as.integer(x_min))
+        stop("'x_max' must be greater than 'x_min'.")
 
     powerlaw_generate_cpp(
         as.integer(n),
@@ -163,14 +229,15 @@ powerlaw_generate <- function(n, alpha, x_min = 1L, x_max = NULL)
 #'
 #' @param data     Positive integer vector of observations.
 #' @param alpha    Power-law exponent.  When \code{NULL} (default) it is
-#'   estimated from the data.
+#'   estimated from the data.  When supplied together with \code{x_min}, both
+#'   parameters are used directly, skipping the fitting step.
 #' @param x_min    Lower cut-off.  When \code{NULL} (default) it is estimated
 #'   from the data.
 #' @param replicas Number of bootstrap replicas (default \code{1000}).
 #'   Values \eqn{\geq 1000} are recommended for stable p-values.
 #' @param type     Distribution type (\code{"left"} or \code{"right"}).
 #'
-#' @return A named list with elements:
+#' @return An object of class \code{"powerlaw_gof"}: a named list with elements:
 #' \describe{
 #'   \item{p_value}{Bootstrap p-value.}
 #'   \item{ks_statistic}{Observed KS statistic.}
@@ -184,6 +251,9 @@ powerlaw_generate <- function(n, alpha, x_min = 1L, x_max = NULL)
 #' Power-law distributions in empirical data.
 #' \emph{SIAM Review}, 51(4), 661-703.
 #' \doi{10.1137/070710111}
+#'
+#' @seealso \code{\link{fit_powerlaw}} to obtain alpha and x_min estimates
+#'   to pass into this function.
 #'
 #' @examples
 #' \dontrun{
@@ -215,11 +285,36 @@ powerlaw_gof <- function(data,
     if (replicas < 1L)
         stop("'replicas' must be a positive integer.")
 
-    powerlaw_gof_cpp(
+    result <- powerlaw_gof_cpp(
         data,
         alpha    = if (is.null(alpha)) NULL else as.double(alpha),
         x_min    = if (is.null(x_min)) NULL else as.integer(x_min),
         replicas = as.integer(replicas),
         type     = type
     )
+    structure(result, class = "powerlaw_gof")
 }
+
+#' Print method for powerlaw_gof objects
+#'
+#' @param x A \code{powerlaw_gof} object returned by \code{\link{powerlaw_gof}}.
+#' @param ... Further arguments (ignored).
+#'
+#' @return Invisibly returns \code{x}.
+#'
+#' @export
+print.powerlaw_gof <- function(x, ...)
+{
+    cat("Bootstrap goodness-of-fit for discrete power-law\n")
+    cat("  Replicas    :", x$replicas, "\n")
+    cat("  p-value     :", format(x$p_value, digits = 4), "\n")
+    cat("  KS statistic:", format(x$ks_statistic, digits = 4), "\n")
+    cat("  Alpha used  :", format(x$alpha, digits = 6), "\n")
+    cat("  x_min used  :", x$x_min, "\n")
+    if (x$p_value >= 0.10)
+        cat("  -> No evidence against the power-law hypothesis (p >= 0.10).\n")
+    else
+        cat("  -> Evidence against the power-law hypothesis (p < 0.10).\n")
+    invisible(x)
+}
+

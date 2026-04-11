@@ -300,3 +300,146 @@ test_that("powerlaw_cdf approaches 0 as x grows large", {
     val_large <- powerlaw_cdf(10000L, alpha = 2.5, x_min = 1L)
     expect_lt(val_large, 0.001)
 })
+
+## ============================================================
+## Tests: edge values below x_min
+## ============================================================
+
+test_that("powerlaw_pdf returns 0 for x < x_min", {
+    vals <- powerlaw_pdf(c(1L, 2L), alpha = 2.5, x_min = 3L)
+    expect_equal(vals[1], 0.0)
+    expect_equal(vals[2], 0.0)
+})
+
+test_that("powerlaw_cdf returns 1.0 for x < x_min (survival function)", {
+    vals <- powerlaw_cdf(c(0L, 1L, 2L), alpha = 2.5, x_min = 3L)
+    expect_true(all(vals == 1.0))
+})
+
+## ============================================================
+## Tests: powerlaw_generate with custom x_max
+## ============================================================
+
+test_that("powerlaw_generate respects custom x_max upper bound", {
+    set.seed(50)
+    x_min <- 1L
+    x_max <- 20L
+    smp   <- powerlaw_generate(200L, alpha = 2.5, x_min = x_min, x_max = x_max)
+    expect_true(all(smp >= x_min))
+    expect_true(all(smp <= x_max))
+})
+
+test_that("powerlaw_generate stops when x_max <= x_min", {
+    expect_error(powerlaw_generate(10L, alpha = 2.5, x_min = 5L, x_max = 5L),
+                 "'x_max' must be greater than 'x_min'")
+    expect_error(powerlaw_generate(10L, alpha = 2.5, x_min = 5L, x_max = 3L),
+                 "'x_max' must be greater than 'x_min'")
+})
+
+## ============================================================
+## Tests: type parameter validation
+## ============================================================
+
+test_that("fit_powerlaw stops on invalid type string", {
+    set.seed(60)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5))
+    expect_error(fit_powerlaw(data, type = "foo"))
+})
+
+test_that("powerlaw_gof stops on invalid type string", {
+    set.seed(61)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5))
+    expect_error(powerlaw_gof(data, replicas = 10L, type = "bar"))
+})
+
+## ============================================================
+## Tests: powerlaw_gof with both alpha and x_min supplied
+## ============================================================
+
+test_that("powerlaw_gof with both alpha and x_min supplied returns valid result", {
+    set.seed(70)
+    data  <- as.integer(r_powerlaw(200, alpha = 2.5, x_min = 1L))
+    fit   <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.1)
+    gof   <- powerlaw_gof(data,
+                          alpha    = fit$alpha,
+                          x_min    = fit$x_min,
+                          replicas = 30L)
+
+    expect_type(gof, "list")
+    expect_gte(gof$p_value, 0.0)
+    expect_lte(gof$p_value, 1.0)
+})
+
+## ============================================================
+## Tests: right-bounded GOF
+## ============================================================
+
+test_that("powerlaw_gof type='right' returns valid result", {
+    set.seed(80)
+    data <- as.integer(r_powerlaw(300, alpha = 2.5, x_min = 1L))
+    data <- data[data <= 100L]
+
+    gof <- powerlaw_gof(data, replicas = 30L, type = "right")
+
+    expect_type(gof, "list")
+    expected <- c("p_value", "ks_statistic", "alpha", "x_min", "replicas")
+    expect_true(all(expected %in% names(gof)))
+    expect_gte(gof$p_value, 0.0)
+    expect_lte(gof$p_value, 1.0)
+})
+
+## ============================================================
+## Tests: S3 class and print/summary methods
+## ============================================================
+
+test_that("fit_powerlaw result has class 'powerlaw_fit'", {
+    set.seed(90)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.1)
+    expect_s3_class(result, "powerlaw_fit")
+})
+
+test_that("print.powerlaw_fit runs without error", {
+    set.seed(91)
+    data   <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.1)
+    expect_output(print(result), "Alpha")
+    expect_output(print(result), "KS statistic")
+})
+
+test_that("summary.powerlaw_fit runs without error", {
+    set.seed(92)
+    data   <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    result <- fit_powerlaw(data, x_min = 1L, alpha_precision = 0.1)
+    expect_output(summary(result), "alpha")
+})
+
+test_that("powerlaw_gof result has class 'powerlaw_gof'", {
+    set.seed(93)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    gof  <- powerlaw_gof(data, x_min = 1L, replicas = 20L)
+    expect_s3_class(gof, "powerlaw_gof")
+})
+
+test_that("print.powerlaw_gof runs without error", {
+    set.seed(94)
+    data <- as.integer(r_powerlaw(100, alpha = 2.5, x_min = 1L))
+    gof  <- powerlaw_gof(data, x_min = 1L, replicas = 20L)
+    expect_output(print(gof), "p-value")
+    expect_output(print(gof), "KS statistic")
+})
+
+## ============================================================
+## Tests: n_tail accuracy
+## ============================================================
+
+test_that("fit_powerlaw n_tail equals observations >= x_min", {
+    set.seed(100)
+    data   <- as.integer(r_powerlaw(300, alpha = 2.5, x_min = 1L))
+    x_min  <- 3L
+    result <- fit_powerlaw(data, x_min = x_min, alpha_precision = 0.1)
+
+    expected_n_tail <- sum(data >= x_min)
+    expect_equal(result$n_tail, expected_n_tail)
+})
+
