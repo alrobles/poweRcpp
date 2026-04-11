@@ -41,7 +41,8 @@ static DistributionType parse_type(const std::string& type)
     if (type == "left")  return DistributionType::LeftBounded;
     if (type == "right") return DistributionType::RightBounded;
     stop("'type' must be \"left\" or \"right\".");
-    return DistributionType::LeftBounded; /* unreachable */
+    /* Not reached – Rcpp::stop() throws but the compiler cannot see that. */
+    return DistributionType::LeftBounded;
 }
 
 /* -----------------------------------------------------------------------
