@@ -331,6 +331,9 @@ int DiscretePowerLawDistribution::EstimateLowerBound(
     double minKS     = numeric_limits<double>::infinity();
     int    xMinEstim = minElem;
 
+    /* Search all candidate xMin values per Clauset, Shalizi & Newman (2009)
+     * §3.3.  An early break would only be correct if the KS curve were
+     * guaranteed unimodal, which is not the case in general. */
     for (int x = minElem; x < maxElem; ++x)
     {
         const DiscretePowerLawDistribution model(data, x, precision,
@@ -340,10 +343,6 @@ int DiscretePowerLawDistribution::EstimateLowerBound(
         {
             minKS     = ks;
             xMinEstim = x;
-        }
-        else
-        {
-            break;
         }
     }
     return max(xMinEstim, 1);
@@ -478,10 +477,17 @@ int DiscretePowerLawDistribution::GenerateRandomSample() const
     do
     {
         x1 = x2;
-        x2 = 2 * x1;
-    } while (GetCDF(x2) >= r);
+        /* Guard against integer overflow: cap at INT_MAX / 2 before doubling. */
+        if (x2 > numeric_limits<int>::max() / 2)
+            x2 = numeric_limits<int>::max();
+        else
+            x2 = 2 * x2;
+    } while (GetCDF(x2) >= r && x2 < numeric_limits<int>::max());
 
-    return BinarySearch(x1, x2, r);
+    const int result = BinarySearch(x1, x2, r);
+    /* BinarySearch returns -1 only in degenerate cases (CDF is flat/NaN).
+     * Fall back to x1 (the last bracket point where CDF >= r). */
+    return (result >= 0) ? result : x1;
 }
 
 /* ---- KS statistic ------------------------------------------------------ */
@@ -509,8 +515,17 @@ double DiscretePowerLawDistribution::GetPDF(int x) const
 {
     if (_state != DistributionState::Valid)
         return numeric_limits<double>::quiet_NaN();
-    return std::pow(static_cast<double>(x), -_alpha)
-           / real_hurwitz_zeta(_alpha, _xMin);
+    if (x < _xMin || x > _xMax)
+        return 0.0;
+
+    double denom;
+    if (_distributionType == DistributionType::LeftBounded)
+        denom = real_hurwitz_zeta(_alpha, static_cast<double>(_xMin));
+    else
+        denom = real_hurwitz_zeta(_alpha, static_cast<double>(_xMin))
+              - real_hurwitz_zeta(_alpha, static_cast<double>(_xMax + 1));
+
+    return std::pow(static_cast<double>(x), -_alpha) / denom;
 }
 
 double DiscretePowerLawDistribution::GetCDF(int x) const
@@ -604,7 +619,7 @@ std::string DiscretePowerLawDistribution::GetDistributionTypeStr() const
 }
 
 DiscretePowerLawDistribution DiscretePowerLawDistribution::FromParameters(
-    double alpha, int xMin, int xMax)
+    double alpha, int xMin, int xMax, DistributionType distributionType)
 {
     DiscretePowerLawDistribution dist;
     dist._alpha            = alpha;
@@ -613,7 +628,7 @@ DiscretePowerLawDistribution DiscretePowerLawDistribution::FromParameters(
     dist._alphaPrecision   = 0.01;
     dist._sampleSize       = 0;
     dist._ksStatistic      = 0.0;
-    dist._distributionType = DistributionType::LeftBounded;
+    dist._distributionType = distributionType;
     dist._state            = DistributionState::Valid;
     dist.PrecalculateCDF();
     return dist;
@@ -652,6 +667,11 @@ SyntheticPowerLawGenerator::SyntheticPowerLawGenerator(
 
 int SyntheticPowerLawGenerator::SampleFromData() const
 {
+    /* Guard: if _nonModelData is empty, _modelSampleProbability == 1.0, so
+     * SampleFromData(n) is called with n == 0 and this branch is never
+     * reached.  The check is kept as a safety net against future refactors. */
+    if (_nonModelData.empty())
+        return _powerLawDistribution.GetXMin();
     const int idx = RandomGen::GetInt(static_cast<int>(_nonModelData.size()) - 1);
     return _nonModelData[static_cast<size_t>(idx)];
 }

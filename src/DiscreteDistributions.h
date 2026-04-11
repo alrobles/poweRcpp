@@ -101,7 +101,6 @@ private:
     static double CalculateCDF(int x, double alpha, int xMin);
     static double CalculateCDF(int x, double alpha, int xMin, int xMax);
 
-    double CalculateKSStatistic(const std::vector<int>& data) const;
     int    BinarySearch(int l, int r, double x) const;
     double GetStandardError(int sampleSize) const;
     void   PrecalculateCDF();
@@ -156,15 +155,26 @@ public:
     std::string        GetDistributionTypeStr() const;
 
     /**
-     * Construct with explicitly supplied alpha and xMin (no fitting).
-     * Intended for PDF/CDF evaluation and random generation when the
-     * parameters are already known.
-     *
-     * @param alpha      Power-law exponent (> 1).
-     * @param xMin       Lower cut-off (>= 1).
-     * @param xMax       Upper cut-off.
+     * Compute the KS statistic between the fitted model and the empirical
+     * distribution of @p data.  This method is public so that callers who
+     * build a model via FromParameters can still obtain the KS statistic.
      */
-    static DiscretePowerLawDistribution FromParameters(double alpha, int xMin, int xMax);
+    double CalculateKSStatistic(const std::vector<int>& data) const;
+
+    /**
+     * Construct with explicitly supplied alpha, xMin, and xMax (no fitting).
+     * Intended for PDF/CDF evaluation and random generation when the
+     * parameters are already known.  Call CalculateKSStatistic() separately
+     * if the KS statistic is required.
+     *
+     * @param alpha            Power-law exponent (> 1).
+     * @param xMin             Lower cut-off (>= 1).
+     * @param xMax             Upper cut-off.
+     * @param distributionType Left- or right-bounded (default: LeftBounded).
+     */
+    static DiscretePowerLawDistribution FromParameters(
+        double alpha, int xMin, int xMax,
+        DistributionType distributionType = DistributionType::LeftBounded);
 };
 
 /**

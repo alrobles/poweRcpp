@@ -15,6 +15,7 @@
 #include <Rcpp.h>
 #include <RcppParallel.h>
 #include "DiscreteDistributions.h"
+#include "VectorUtilities.h"
 #include "Zeta.h"
 using namespace Rcpp;
 using namespace RcppParallel;
@@ -34,6 +35,15 @@ static std::vector<int> to_int_vector(const IntegerVector& x)
     return v;
 }
 
+/// Parse and validate the type string.  Stops with an error on unknown values.
+static DistributionType parse_type(const std::string& type)
+{
+    if (type == "left")  return DistributionType::LeftBounded;
+    if (type == "right") return DistributionType::RightBounded;
+    stop("'type' must be \"left\" or \"right\".");
+    return DistributionType::LeftBounded; /* unreachable */
+}
+
 /* -----------------------------------------------------------------------
  * Exported functions
  * --------------------------------------------------------------------- */
@@ -47,7 +57,7 @@ static std::vector<int> to_int_vector(const IntegerVector& x)
 //' @param data     Integer vector of observations (positive integers).
 //' @param x_min    Integer lower cut-off. If \code{NA} (default) it is
 //'                 estimated from the data via KS minimisation.
-//' @param alpha_precision Numeric grid step for the alpha search
+//' @param alpha_precision Numeric tolerance for the alpha search
 //'                 (default 0.01).
 //' @param type     Distribution type: \code{"left"} (Type I, default) or
 //'                 \code{"right"} (Type II, right-bounded).
@@ -83,9 +93,7 @@ List fit_powerlaw_cpp(IntegerVector data,
     if (alpha_precision <= 0.0 || alpha_precision > 1.0)
         stop("'alpha_precision' must be in (0, 1].");
 
-    const DistributionType dtype = (type == "right")
-                                       ? DistributionType::RightBounded
-                                       : DistributionType::LeftBounded;
+    const DistributionType dtype = parse_type(type);
 
     std::vector<int> v = to_int_vector(data);
 
@@ -96,6 +104,16 @@ List fit_powerlaw_cpp(IntegerVector data,
 
     const bool valid = model.StateIsValid();
 
+    /* Compute the actual tail count (observations that fall in the power-law
+     * region), not just the total dataset size. */
+    int n_tail_val = NA_INTEGER;
+    if (valid)
+    {
+        n_tail_val = (dtype == DistributionType::LeftBounded)
+            ? VectorUtilities::NumberOfGreaterOrEqual(v, model.GetXMin())
+            : VectorUtilities::NumberOfLowerOrEqual(v, model.GetXMax());
+    }
+
     return List::create(
         Named("alpha")          = valid ? model.GetAlpha()          : NA_REAL,
         Named("x_min")          = valid ? model.GetXMin()           : NA_INTEGER,
@@ -103,7 +121,7 @@ List fit_powerlaw_cpp(IntegerVector data,
         Named("ks_statistic")   = valid ? model.GetKSStatistic()    : NA_REAL,
         Named("standard_error") = valid ? model.GetStandardError()  : NA_REAL,
         Named("log_likelihood") = valid ? model.GetLogLikelihood(v) : NA_REAL,
-        Named("n_tail")         = valid ? (int) v.size()            : NA_INTEGER,
+        Named("n_tail")         = n_tail_val,
         Named("type")           = model.GetDistributionTypeStr(),
         Named("valid")          = valid
     );
@@ -144,16 +162,18 @@ NumericVector powerlaw_pdf_cpp(IntegerVector x, double alpha, int x_min = 1)
     return out;
 }
 
-//' Discrete power-law cumulative distribution function
+//' Discrete power-law survival function (complementary CDF)
 //'
 //' Returns the survival function \eqn{P(X \geq x)} for a discrete power-law
-//' distribution with the given parameters.
+//' distribution with the given parameters.  Note: this is the complementary
+//' CDF (also called the survival function), not the traditional CDF
+//' \eqn{P(X \leq x)}.
 //'
-//' @param x     Integer vector of values at which to evaluate the CDF.
+//' @param x     Integer vector of values at which to evaluate the survival function.
 //' @param alpha Power-law exponent (alpha > 1).
 //' @param x_min Lower cut-off (positive integer, default 1).
 //'
-//' @return Numeric vector of survival-function values.
+//' @return Numeric vector of survival-function values in [0, 1].
 //'
 //' @examples
 //' powerlaw_cdf(1:10, alpha = 2.5, x_min = 1)
@@ -227,7 +247,8 @@ IntegerVector powerlaw_generate_cpp(int n, double alpha, int x_min = 1,
 //'
 //' @param data     Integer vector of observations.
 //' @param alpha    Power-law exponent.  If \code{NA} (default) it is estimated
-//'                 from \code{data}.
+//'                 from \code{data}.  When supplied together with \code{x_min}
+//'                 both parameters are used directly, skipping the fitting step.
 //' @param x_min    Lower cut-off.  If \code{NA} (default) it is estimated
 //'                 from \code{data}.
 //' @param replicas Number of bootstrap replicas (default 1000).
@@ -264,22 +285,49 @@ List powerlaw_gof_cpp(IntegerVector data,
     if (replicas <= 0)
         stop("'replicas' must be a positive integer.");
 
-    const DistributionType dtype = (type == "right")
-                                       ? DistributionType::RightBounded
-                                       : DistributionType::LeftBounded;
+    const DistributionType dtype = parse_type(type);
 
     std::vector<int> v = to_int_vector(data);
 
-    /* Fit the model (or use supplied parameters) */
-    DiscretePowerLawDistribution model =
-        x_min.isNull()
-            ? DiscretePowerLawDistribution(v, 0.01, dtype)
-            : DiscretePowerLawDistribution(v, as<int>(x_min), 0.01, dtype);
+    /* Fit the model (or use supplied parameters).
+     *
+     * If both alpha and x_min are provided, bypass fitting entirely and use
+     * the supplied values.  This lets callers reuse parameters from a prior
+     * fit_powerlaw() call without redundant computation.
+     *
+     * If only x_min is provided, estimate alpha with Brent's method.
+     * If neither is provided, estimate both from data.
+     * If only alpha is provided, estimate x_min (alpha is overridden by MLE). */
+    DiscretePowerLawDistribution model;
+    double observed_ks;
 
-    if (!model.StateIsValid())
-        stop("Power-law model fitting failed. Check that data contains positive integers.");
+    if (!alpha.isNull() && !x_min.isNull())
+    {
+        /* Both supplied: construct directly from parameters. */
+        const int    xmin_val = as<int>(x_min);
+        const double xmax_val = static_cast<double>(VectorUtilities::Max(v));
+        const int    xmax_int = static_cast<int>(xmax_val);
 
-    const double observed_ks = model.GetKSStatistic();
+        model      = DiscretePowerLawDistribution::FromParameters(
+                         as<double>(alpha), xmin_val, xmax_int, dtype);
+        observed_ks = model.CalculateKSStatistic(v);
+    }
+    else
+    {
+        if (!alpha.isNull())
+            warning("'alpha' is ignored when 'x_min' is not supplied; "
+                    "alpha will be estimated from data.");
+
+        model = x_min.isNull()
+                    ? DiscretePowerLawDistribution(v, 0.01, dtype)
+                    : DiscretePowerLawDistribution(v, as<int>(x_min), 0.01, dtype);
+
+        if (!model.StateIsValid())
+            stop("Power-law model fitting failed. "
+                 "Check that data contains positive integers.");
+
+        observed_ks = model.GetKSStatistic();
+    }
 
     /* Run parallel bootstrap */
     RandomGen::Seed();
@@ -324,3 +372,4 @@ List powerlaw_gof_cpp(IntegerVector data,
         Named("replicas")     = replicas
     );
 }
+

@@ -10,7 +10,7 @@
 #' @param data     Integer vector of observations (positive integers).
 #' @param x_min    Integer lower cut-off. If \code{NA} (default) it is
 #'                 estimated from the data via KS minimisation.
-#' @param alpha_precision Numeric grid step for the alpha search
+#' @param alpha_precision Numeric tolerance for the alpha search
 #'                 (default 0.01).
 #' @param type     Distribution type: \code{"left"} (Type I, default) or
 #'                 \code{"right"} (Type II, right-bounded).
@@ -58,10 +58,11 @@ powerlaw_pdf_cpp <- function(x, alpha, x_min = 1L) {
     .Call(`_poweRcpp_powerlaw_pdf_cpp`, x, alpha, x_min)
 }
 
-#' Discrete power-law cumulative distribution function
+#' Discrete power-law survival function (complementary CDF)
 #'
 #' Returns the survival function \eqn{P(X \geq x)} for a discrete power-law
-#' distribution with the given parameters.
+#' distribution with the given parameters.  Note: this is the complementary
+#' CDF (survival function), not the traditional CDF \eqn{P(X \leq x)}.
 #'
 #' @param x     Integer vector of values at which to evaluate the CDF.
 #' @param alpha Power-law exponent (alpha > 1).
@@ -105,7 +106,8 @@ powerlaw_generate_cpp <- function(n, alpha, x_min = 1L, x_max = NULL) {
 #'
 #' @param data     Integer vector of observations.
 #' @param alpha    Power-law exponent.  If \code{NA} (default) it is estimated
-#'                 from \code{data}.
+#'                 from \code{data}.  When supplied together with \code{x_min},
+#'                 both are used directly, skipping the fitting step.
 #' @param x_min    Lower cut-off.  If \code{NA} (default) it is estimated
 #'                 from \code{data}.
 #' @param replicas Number of bootstrap replicas (default 1000).
